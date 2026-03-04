@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Villa Hacienda – Calculateur de coûts</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #f0f4f8; font-family: 'Inter', 'Segoe UI', sans-serif; -webkit-text-size-adjust: 100%; }
+    input[type=range] { accent-color: #1a6b8a; cursor: pointer; width: 100%; height: 20px; }
+    input[type=number] { -moz-appearance: textfield; }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { opacity: 1; }
+    a { color: #1a6b8a; }
+
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 28px; }
+    @media (min-width: 600px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+    @media (min-width: 800px) { .cards { grid-template-columns: repeat(5, 1fr); } }
+
+    .col-ad, .col-enf, .col-parts { display: none; }
+    @media (min-width: 480px) { .col-ad, .col-enf { display: table-cell; } }
+    @media (min-width: 600px) { .col-parts { display: table-cell; } }
+
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 11px 10px; }
+    @media (min-width: 480px) { th, td { padding: 13px 14px; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    const { useState, useMemo } = React;
+    const el = React.createElement;
+
+    const C = {
+      bg: "#f0f4f8", card: "#ffffff", border: "#d6e4ec",
+      accent: "#1a6b8a", accentLight: "#1a6b8a22", accentMid: "#1a6b8a44",
+      text: "#1c2b35", muted: "#4a7a8a", faint: "#7a9aaa",
+      tableHead: "#f0f7fa", footerBg: "#e8f3f8",
+    };
+
+    const FAMILIES = [
+      { name: "Alexandre + Florence", adults: 2, kids: 0, kidNames: [] },
+      { name: "Baptiste + Oriane",    adults: 2, kids: 0, kidNames: [] },
+      { name: "Franck + Cindy",       adults: 2, kids: 2, kidNames: ["Lou", "Jules"] },
+      { name: "Jean + Delphine",      adults: 2, kids: 0, kidNames: [] },
+      { name: "Marc + Vika",          adults: 2, kids: 2, kidNames: ["Léon", "Noah"] },
+      { name: "Mathieu + Laurence",   adults: 2, kids: 2, kidNames: ["Alexandre", "Arthur"] },
+      { name: "Matthieu",             adults: 1, kids: 0, kidNames: [] },
+      { name: "Tam + Antje",          adults: 2, kids: 0, kidNames: [] },
+    ];
+
+    const fmt = (n) => Math.round(n).toLocaleString("fr-FR") + " \u20ac";
+
+    const svg = (paths, w) => el("svg", { xmlns:"http://www.w3.org/2000/svg", width:w||20, height:w||20, viewBox:"0 0 24 24", fill:"none", stroke:C.accent, strokeWidth:2, strokeLinecap:"round", strokeLinejoin:"round", style:{flexShrink:0} }, ...paths);
+    const CalendarIcon = () => svg([el("rect",{key:"r",x:3,y:4,width:18,height:18,rx:2,ry:2}),el("line",{key:"l1",x1:16,y1:2,x2:16,y2:6}),el("line",{key:"l2",x1:8,y1:2,x2:8,y2:6}),el("line",{key:"l3",x1:3,y1:10,x2:21,y2:10})]);
+    const PinIcon    = () => svg([el("path",{key:"p",d:"M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"}),el("circle",{key:"c",cx:12,cy:10,r:3})]);
+    const LinkIcon   = () => svg([el("path",{key:"p1",d:"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"}),el("path",{key:"p2",d:"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"})]);
+
+    function Card({ label, children, highlight }) {
+      return el("div", { style: { background:C.card, borderRadius:12, padding:"14px 16px", border: highlight ? "2px solid "+C.accentMid : "1px solid "+C.border, boxShadow:"0 1px 3px rgba(0,0,0,0.04)" } },
+        el("div", { style:{fontSize:10,textTransform:"uppercase",letterSpacing:1.2,color:C.muted,marginBottom:6,fontWeight:600} }, label),
+        children
+      );
+    }
+
+    function VillaCalculator() {
+      const [budget, setBudget] = useState(8672);
+      const [nights, setNights] = useState(7);
+      const [kidShare, setKidShare] = useState(0.3);
+
+      const data = useMemo(() => {
+        const totalShares = FAMILIES.reduce((s, f) => s + f.adults + f.kids * kidShare, 0);
+        const costPerShare = totalShares > 0 ? budget / totalShares : 0;
+        const costPerSharePerNight = nights > 0 ? costPerShare / nights : 0;
+        const totalPerNight = nights > 0 ? budget / nights : 0;
+        const rows = FAMILIES.map(f => {
+          const shares = f.adults + f.kids * kidShare;
+          return { ...f, shares, total: shares * costPerShare, perNight: shares * costPerSharePerNight };
+        });
+        return { costPerShare, costPerSharePerNight, totalPerNight, rows };
+      }, [budget, nights, kidShare]);
+
+      const totals = data.rows.reduce(
+        (acc, r) => ({ adults:acc.adults+r.adults, kids:acc.kids+r.kids, shares:acc.shares+r.shares, total:acc.total+r.total, perNight:acc.perNight+r.perNight }),
+        { adults:0, kids:0, shares:0, total:0, perNight:0 }
+      );
+
+      const numStyle = { background:"transparent", border:"none", outline:"none", fontFamily:"'Space Mono',monospace", fontSize:20, fontWeight:700, color:C.text, width:"100%", minWidth:0 };
+
+      return el("div", { style:{minHeight:"100vh",background:C.bg,color:C.text,padding:"24px 16px"} },
+        el("div", { style:{maxWidth:880,margin:"0 auto"} },
+
+          // Header
+          el("div", { style:{marginBottom:24} },
+            el("h1", { style:{fontSize:22,fontWeight:800,color:C.text,marginBottom:12,letterSpacing:"-0.5px",lineHeight:1.2} }, "Villa Hacienda"),
+            el("div", { style:{display:"flex",flexDirection:"column",gap:9} },
+              el("div",{style:{display:"flex",alignItems:"center",gap:9}}, el(CalendarIcon), el("span",{style:{fontSize:18,fontWeight:700,color:C.accent}},"8 au 15 ao\u00fbt")),
+              el("div",{style:{display:"flex",alignItems:"center",gap:9}}, el(PinIcon),     el("span",{style:{fontSize:18,fontWeight:700,color:C.accent}},"Trigor (Croatie)")),
+              el("div",{style:{display:"flex",alignItems:"center",gap:9}}, el(LinkIcon),
+                el("a",{href:"https://www.airbnb.com/rooms/917862197853996164?adults=16&check_in=2026-08-08&check_out=2026-08-15&children=0&infants=0&pets=0&wishlist_item_id=11005937690555&source_impression_id=p3_1772633909_P31iXjwiZorpR8hl&previous_page_section_name=1000",
+                  target:"_blank",rel:"noopener noreferrer",
+                  style:{fontSize:18,fontWeight:700,color:C.accent,textDecoration:"none",borderBottom:"2px solid "+C.accentMid}
+                },"Lien Airbnb")
+              )
+            )
+          ),
+
+          // Cards
+          el("div", { className:"cards" },
+            el(Card,{label:"Budget total"},
+              el("div",{style:{display:"flex",alignItems:"baseline",gap:6}},
+                el("input",{type:"number",value:budget,step:1,onChange:ev=>setBudget(Number(ev.target.value)||0),style:numStyle}),
+                el("span",{style:{color:C.faint,fontSize:12,flexShrink:0}},"\u20ac")
+              )
+            ),
+            el(Card,{label:"Nuits"},
+              el("div",{style:{display:"flex",alignItems:"baseline",gap:6}},
+                el("input",{type:"number",value:nights,step:1,onChange:ev=>setNights(Number(ev.target.value)||0),style:numStyle}),
+                el("span",{style:{color:C.faint,fontSize:12,flexShrink:0}},"nuits")
+              )
+            ),
+            el(Card,{label:"Part enfant",highlight:true},
+              el("div",{style:{display:"flex",alignItems:"baseline",gap:6,marginBottom:8}},
+                el("input",{type:"number",value:kidShare,min:0,max:1,step:0.05,
+                  onChange:ev=>{const v=parseFloat(ev.target.value);if(!isNaN(v)&&v>=0&&v<=1)setKidShare(Math.round(v*100)/100);},
+                  style:{...numStyle,color:C.accent}
+                }),
+                el("span",{style:{color:C.faint,fontSize:12,flexShrink:0}},"part")
+              ),
+              el("input",{type:"range",min:0,max:1,step:0.05,value:kidShare,onChange:ev=>setKidShare(parseFloat(ev.target.value))})
+            ),
+            el(Card,{label:"Co\u00fbt / part"},
+              el("div",{style:{fontFamily:"'Space Mono',monospace",fontSize:20,fontWeight:700,color:C.accent}},fmt(data.costPerShare)),
+              el("div",{style:{fontSize:11,color:C.faint,marginTop:3}},fmt(data.costPerSharePerNight)+" / nuit")
+            ),
+            el(Card,{label:"Co\u00fbt / nuit"},
+              el("div",{style:{fontFamily:"'Space Mono',monospace",fontSize:20,fontWeight:700,color:C.accent}},fmt(data.totalPerNight)),
+              el("div",{style:{fontSize:11,color:C.faint,marginTop:3}},"total groupe")
+            )
+          ),
+
+          // Table
+          el("div",{style:{background:C.card,borderRadius:14,border:"1px solid "+C.border,overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}},
+            el("table",null,
+              el("thead",null,
+                el("tr",{style:{borderBottom:"1px solid "+C.border,background:C.tableHead}},
+                  el("th",{style:{textAlign:"left",fontSize:11,textTransform:"uppercase",letterSpacing:1.2,color:C.accent,fontWeight:700}},"Groupes"),
+                  el("th",{className:"col-ad",  style:{textAlign:"right",fontSize:11,textTransform:"uppercase",letterSpacing:1.2,color:C.accent,fontWeight:700}},"Ad."),
+                  el("th",{className:"col-enf", style:{textAlign:"right",fontSize:11,textTransform:"uppercase",letterSpacing:1.2,color:C.accent,fontWeight:700}},"Enf."),
+                  el("th",{className:"col-parts",style:{textAlign:"right",fontSize:11,textTransform:"uppercase",letterSpacing:1.2,color:C.accent,fontWeight:700}},"Parts"),
+                  el("th",{style:{textAlign:"right",fontSize:11,textTransform:"uppercase",letterSpacing:1.2,color:C.accent,fontWeight:700}},"Total"),
+                  el("th",{style:{textAlign:"right",fontSize:11,textTransform:"uppercase",letterSpacing:1.2,color:C.accent,fontWeight:700}},"/ nuit")
+                )
+              ),
+              el("tbody",null,
+                data.rows.map((r,i)=>
+                  el("tr",{key:i,style:{borderBottom:"1px solid "+C.accentLight}},
+                    el("td",{style:{fontSize:14}},
+                      el("span",{style:{fontWeight:600,color:C.text}},r.name),
+                      r.kidNames.length>0&&el("span",{style:{color:C.muted,fontSize:12,marginLeft:6,fontWeight:500}},"("+r.kidNames.join(", ")+")")
+                    ),
+                    el("td",{className:"col-ad",  style:{textAlign:"right",fontFamily:"'Space Mono',monospace",fontSize:14,color:C.text,fontWeight:600}},r.adults),
+                    el("td",{className:"col-enf", style:{textAlign:"right",fontFamily:"'Space Mono',monospace",fontSize:14,color:C.text,fontWeight:600}},r.kids||"–"),
+                    el("td",{className:"col-parts",style:{textAlign:"right",fontFamily:"'Space Mono',monospace",fontSize:14,color:C.accent,fontWeight:700}},r.shares),
+                    el("td",{style:{textAlign:"right",fontFamily:"'Space Mono',monospace",fontSize:14,fontWeight:700,color:C.text}},fmt(r.total)),
+                    el("td",{style:{textAlign:"right",fontFamily:"'Space Mono',monospace",fontSize:13,color:C.muted,fontWeight:600}},fmt(r.perNight))
+                  )
+                )
+              ),
+              el("tfoot",null,
+                el("tr",{style:{borderTop:"2px solid "+C.accentMid,background:C.footerBg}},
+                  el("td",{style:{fontWeight:800,color:C.accent,fontSize:14}},"TOTAL"),
+                  el("td",{className:"col-ad",  style:{textAlign:"right",fontFamily:"'Space Mono',monospace",fontWeight:700,color:C.accent}},totals.adults),
+                  el("td",{className:"col-enf", style:{textAlign:"right",fontFamily:"'Space Mono',monospace",fontWeight:700,color:C.accent}},totals.kids),
+                  el("td",{className:"col-parts",style:{textAlign:"right",fontFamily:"'Space Mono',monospace",fontWeight:700,color:C.accent}},Math.round(totals.shares)),
+                  el("td",{style:{textAlign:"right",fontFamily:"'Space Mono',monospace",fontWeight:700,color:C.accent}},fmt(totals.total)),
+                  el("td",{style:{textAlign:"right",fontFamily:"'Space Mono',monospace",fontWeight:700,color:C.accent}},fmt(totals.perNight))
+                )
+              )
+            )
+          )
+        )
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(el(VillaCalculator));
+  </script>
+</body>
+</html>
